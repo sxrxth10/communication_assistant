@@ -33,7 +33,7 @@ A web-based application built with Streamlit and OpenAI’s GPT-3.5-turbo model 
 
 
 
-Usage Examples
+## Usage Examples
 1. **Interactive Chat (Daily Practice)**
     Navigate: Go to the "Daily Practice" tab.
     Input: Select "Casual Friend" and type: "I had a great day at the park!"
@@ -68,26 +68,26 @@ Usage Examples
     3. Structure responses with a clear beginning and end.
 
 
-Design Decisions
-    API Choice: OpenAI GPT-3.5-turbo
+### Design Decisions
+1. **API Choice: OpenAI GPT-3.5-turbo**
         Why: Selected over xAI’s Grok for its proven reliability, extensive     documentation, and strong performance in natural language tasks. GPT-3.5-turbo balances cost and quality, ideal for real-time chat and feedback generation.
         Trade-off: Lacks xAI’s unique perspective but ensures stability for this prototype.
-    Prompt Engineering
+2. **Prompt Engineering**
         Chat Roles: Prompts (e.g., Job Interviewer) are detailed (~100 words) to ensure natural, adaptive conversations. Example: "Ask one natural question at a time, adapting to their response" avoids robotic lists.
         Feedback: Structured prompts (e.g., "Return scores out of 10 with suggestions") guarantee consistent, actionable outputs. Kept concise (~90 words) to fit max_tokens=300.
         Why: Balances realism with efficiency, enhancing learner engagement and usability.
-    Error Handling
+3. **Error Handling**
         Approach: Retries for RateLimitError, requests.Timeout, and APIError (503) with exponential backoff (1s, 2s, 4s). Silent failures for progress scores ensure feedback isn’t disrupted.
         Why: Prioritizes user experience—graceful recovery from API hiccups keeps the app reliable.
-    Streamlit Framework
+4. **Streamlit Framework**
         Why: Chosen for its simplicity and rapid prototyping of interactive web UIs. Features like st.audio and st.spinner enhance UX without complex frontend code.
         Trade-off: Less extensible than a full web framework (e.g., Flask), but sufficient for this scope.
-    Progress Storage
+5. **Progress Storage**
         Why CSV: Simple, human-readable format over SQLite/JSON for quick setup and progress tracking via pandas.
         Limitation: Scales poorly for many users—future work could use a database.
 
 
-Future Improvements
+### Future Improvements
     Add unit/integration tests for core functions.
     Support xAI API switching via configuration.
     Enhance voice feedback with real-time pacing analysis.
