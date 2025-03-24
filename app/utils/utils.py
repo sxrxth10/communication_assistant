@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import openai
 from openai import RateLimitError, APIError, AuthenticationError
 import requests
+import time
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -61,31 +62,41 @@ def daily_practice_chat_response(role, chat_history):
         "Debate Opponent": "You are a debate opponent. Challenge the user's arguments and provide counterpoints.",
         "Casual Friend": "You are a friendly and casual conversational partner. Keep the conversation light, engaging, and fun."
     }
-
     # API call with error handling
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "system", "content": role_prompts[role]}] + 
-                     [{"role": msg["role"], "content": msg["content"]} for msg in chat_history],
-            timeout=20  # Set a timeout in seconds
-        )
-        ai_response = response.choices[0].message.content.strip()
-        ai_audio = text_to_speech(ai_response)  # Assuming this function exists and works
-        return ai_response, ai_audio
-    
-    except RateLimitError:
-        return "Oops! We've hit the API rate limit. Please wait a moment and try again.", None
-    except AuthenticationError:
-        return "Authentication error: Please check your API key and try again.", None
-    except APIError as e:
-        return f"Server issue: {str(e)}. Please try again later.", None
-    except requests.Timeout:
-        return "The request timed out. Check your internet connection and try again.", None
-    except Exception as e:
-        return f"An unexpected error occurred: {str(e)}. Please try again or contact support.", None
-
-
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "system", "content": role_prompts[role]}] + 
+                         [{"role": msg["role"], "content": msg["content"]} for msg in chat_history],
+                max_tokens=150,  # Limit response length
+                timeout=20  # Timeout in seconds
+            )
+            ai_response = response.choices[0].message.content.strip()
+            ai_audio = text_to_speech(ai_response)  # Generate audio from response
+            return ai_response, ai_audio
+        
+        except RateLimitError:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                continue
+            return "Rate limit exceeded after retries. Please try again later.", None
+        except requests.Timeout:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            return "Request timed out after retries. Check your connection and retry.", None
+        except APIError as e:
+            if "503" in str(e) and attempt < max_retries - 1:  # Retry on server downtime (503)
+                time.sleep(2 ** attempt)
+                continue
+            return f"Server issue: {str(e)}. Please try again later.", None
+        except AuthenticationError:
+            return "Authentication error: Please check your API key and try again.", None
+        except Exception as e:
+            return f"An unexpected error occurred: {str(e)}. Please try again or contact support.", None
+        
 def generate_progress_scores(client, activity, response, chat_history=None):
     prompt = (
         "You are a communication trainer. Evaluate this response or chat session and return only scores out of 10 for: "
@@ -142,33 +153,47 @@ def generate_feedback_daily_practice(chat_history):
         "Return a structured report with scores out of 10 for each category and specific suggestions for improvement."
     )
     # API call with error handling
-    try:
-        feedback = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "system", "content": prompt}] + 
-                     [{"role": msg["role"], "content": msg["content"]} for msg in chat_history],
-            timeout=10  # Timeout in seconds
-        ).choices[0].message.content
-
+    max_retries = 3
+    for attempt in range(max_retries):
         try:
-            scores = generate_progress_scores(client, "Daily Practice", None, chat_history)
-            date = datetime.now().strftime("%Y-%m-%d")
-            save_progress_csv(date, "Daily Practice", scores)
-        except (RateLimitError, requests.Timeout, APIError, Exception) as e:
-            pass
-        return feedback
+            feedback_response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "system", "content": prompt}] + 
+                         [{"role": msg["role"], "content": msg["content"]} for msg in chat_history],
+                max_tokens=300,  # Limit response length
+                timeout=10  # Timeout in seconds
+            )
+            feedback = feedback_response.choices[0].message.content.strip()
 
-    except RateLimitError:
-        return "Oops! We've hit the API rate limit. Please wait a moment and try again."
-    except AuthenticationError:
-        return "Authentication error: Please check your API key and try again."
-    except requests.Timeout:
-        return "The request timed out. Check your internet connection and try again."
-    except APIError as e:
-        return f"Server issue: {str(e)}. Please try again later."
-    except Exception as e:
-        return f"An unexpected error occurred: {str(e)}. Please try again or contact support."
+            # Generate and save progress scores silently
+            try:
+                scores = generate_progress_scores(client, "Daily Practice", None, chat_history)
+                date = datetime.now().strftime("%Y-%m-%d")
+                save_progress_csv(date, "Daily Practice", scores)
+            except (RateLimitError, requests.Timeout, APIError, Exception):
+                pass  # Silent failure for scores
 
+            return feedback
+
+        except RateLimitError:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                continue
+            return "Rate limit exceeded after retries. Please try again later."
+        except requests.Timeout:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            return "Request timed out after retries. Check your connection and retry."
+        except APIError as e:
+            if "503" in str(e) and attempt < max_retries - 1:  # Retry on server downtime (503)
+                time.sleep(2 ** attempt)
+                continue
+            return f"Server issue: {str(e)}. Please try again later."
+        except AuthenticationError:
+            return "Authentication error: Please check your API key."
+        except Exception as e:
+            return f"An unexpected error occurred: {str(e)}. Please try again or contact support."
 
 def generate_tips_from_trend(df):
     if df.empty:
@@ -198,13 +223,30 @@ def generate_tips_from_trend(df):
     
     Provide 3 concise, actionable tips to improve communication skills, tailored to this trend and recent performance.
     """
-    # Call OpenAI API
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",  # Or your preferred model
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=150
-    )
-    return response.choices[0].message.content.strip()
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=150,
+                timeout=10
+            )
+            return response.choices[0].message.content.strip()
+        
+        except RateLimitError:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # 1s, 2s, 4s
+                continue
+            return "Oops! We've hit the API rate limit. Please wait a moment and try again."
+        except AuthenticationError:
+            return "Authentication error: Please check your API key."
+        except requests.Timeout:
+            return "Request timed out. Check your connection and retry."
+        except APIError as e:
+            return f"Server issue: {str(e)}. Try again later."
+        except Exception as e:
+            return f"Unexpected error: {str(e)}. Contact support."
 
 # Feedback generation function
 def generate_feedback_presentation(response,task, is_voice=False):
@@ -217,16 +259,41 @@ def generate_feedback_presentation(response,task, is_voice=False):
         "Do not be neutral—highlight strengths and weaknesses. "
         "Return a structured report with scores out of 10 for each category and specific suggestions for improvement."
     )
-    feedback = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "system", "content": prompt}, {"role": "user", "content": f"Task: {task}\nResponse: {response}"}]
-    ).choices[0].message.content
-    
-    scores = generate_progress_scores(client, "Presentation", response)
-    day = datetime.now().strftime("Day %Y-%m-%d")
-    date = datetime.now().strftime("%Y-%m-%d")
-    save_progress_csv(date, "Presentation", scores)
-    return feedback
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            feedback_response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": f"Task: {task}\nResponse: {response}"}
+                ],
+                timeout=10
+            )
+            feedback = feedback_response.choices[0].message.content.strip()
+            try:
+                scores = generate_progress_scores(client, "Presentation", response)
+                date = datetime.now().strftime("%Y-%m-%d")
+                save_progress_csv(date, "Presentation", scores)
+            except (RateLimitError, requests.Timeout, APIError, Exception):
+                pass
+
+            return feedback
+
+        except RateLimitError:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # 1s, 2s, 4s
+                continue
+            return "Rate limit exceeded after retries. Please try again later."
+        except AuthenticationError:
+            return "Authentication error: Please check your API key."
+        except requests.Timeout:
+            return "Request timed out. Check your connection and retry."
+        except APIError as e:
+            return f"Server issue: {str(e)}. Try again later."
+        except Exception as e:
+            return f"Unexpected error: {str(e)}. Contact support."
+        
 
 # Function to generate prompts using LLM
 def generate_prompt_skilltraining(activity):
@@ -248,11 +315,27 @@ def generate_prompt_skilltraining(activity):
             "Examples: 'A teammate blames you for a failed project,' 'Your boss rejects your idea without reason.'"
         )
     }
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "system", "content": "You are a communication trainer."}, {"role": "user", "content": prompts[activity]}]
-    )
-    return response.choices[0].message.content.strip()
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a communication trainer."},
+                {"role": "user", "content": prompts[activity]}
+            ],
+            timeout=10 
+        )
+        return response.choices[0].message.content.strip()
+    
+    except RateLimitError:
+        return "Oops! We've hit the API rate limit. Please wait a moment and try again."
+    except AuthenticationError:
+        return "Authentication error: Please check your API key and try again."
+    except requests.Timeout:
+        return "The request timed out. Check your internet connection and try again."
+    except APIError as e:
+        return f"Server issue: {str(e)}. Please try again later."
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}. Please try again or contact support."
 
 # Feedback generation function
 def generate_feedback_skilltraining(response, activity, is_voice=False):
@@ -265,14 +348,46 @@ def generate_feedback_skilltraining(response, activity, is_voice=False):
         "Do not be neutral—highlight strengths and weaknesses. "
         "Return a structured report with scores out of 10 for each category and specific suggestions for improvement."
     )
-    feedback = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "system", "content": prompt}, {"role": "user", "content": f"Prompt/Scenario: {st.session_state.current_prompt}\nResponse: {response}"}]
-    ).choices[0].message.content
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            feedback_response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": f"Prompt/Scenario: {st.session_state.current_prompt}\nResponse: {response}"}
+                ],
+                max_tokens=300,  # Limit response length
+                timeout=10  # Timeout in seconds
+            )
+            feedback = feedback_response.choices[0].message.content.strip()
 
-    scores = generate_progress_scores(client, activity, response)
-    day = datetime.now().strftime("Day %Y-%m-%d")
-    date = datetime.now().strftime("%Y-%m-%d")
-    save_progress_csv(date, activity, scores)
-    st.session_state.current_prompt = generate_prompt_skilltraining(activity)
-    return feedback
+            # Handle progress scores silently
+            try:
+                scores = generate_progress_scores(client, activity, response)
+                date = datetime.now().strftime("%Y-%m-%d")
+                save_progress_csv(date, activity, scores)
+            except (RateLimitError, requests.Timeout, APIError, Exception):
+                pass  # Silent failure for scores
+
+            # Handle new prompt generation silently
+            try:
+                st.session_state.current_prompt = generate_prompt_skilltraining(activity)
+            except (RateLimitError, requests.Timeout, APIError, Exception):
+                pass  # Silent failure; keep old prompt if it fails
+
+            return feedback
+
+        except RateLimitError:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                continue
+            return "Rate limit exceeded after retries. Please try again later."
+        except AuthenticationError:
+            return "Authentication error: Please check your API key."
+        except requests.Timeout:
+            return "Request timed out. Check your connection and retry."
+        except APIError as e:
+            return f"Server issue: {str(e)}. Please try again later."
+        except Exception as e:
+            return f"Unexpected error: {str(e)}. Contact support."

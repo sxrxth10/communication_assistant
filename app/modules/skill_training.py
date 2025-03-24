@@ -48,18 +48,22 @@ def display_skill_training():
 
     # Initialize session state
     if "current_prompt" not in st.session_state or st.session_state.get("current_activity") != activity:
-        st.session_state.current_prompt = generate_prompt_skilltraining(activity)
+        with st.spinner("Generating a new prompt..."):
+            st.session_state.current_prompt = generate_prompt_skilltraining(activity)
         st.session_state.current_activity = activity
         st.session_state.feedback = None
 
     # Display the prompt as an AI chat message
     with st.chat_message("assistant"):
-        if activity == "Impromptu Speaking":
-            st.write(f"Topic: {st.session_state.current_prompt}")
-        elif activity == "Storytelling":
-            st.write(f"Prompt: {st.session_state.current_prompt}")
-        elif activity == "Conflict Resolution":
-            st.write(f"Scenario: '{st.session_state.current_prompt}'")
+        if st.session_state.current_prompt.startswith("Oops!") or "error" in st.session_state.current_prompt.lower():
+            st.error(st.session_state.current_prompt)  # Display errors in red
+        else:
+            if activity == "Impromptu Speaking":
+                st.write(f"Topic: {st.session_state.current_prompt}")
+            elif activity == "Storytelling":
+                st.write(f"Prompt: {st.session_state.current_prompt}")
+            elif activity == "Conflict Resolution":
+                st.write(f"Scenario: '{st.session_state.current_prompt}'")
 
     # Record button
     st.markdown('<div class="record-button">', unsafe_allow_html=True)

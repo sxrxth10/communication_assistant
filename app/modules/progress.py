@@ -97,15 +97,18 @@ def display_progress():
     # Get Tips Section
     st.subheader("Advice")
     st.markdown('<div class="tips-section">', unsafe_allow_html=True)
-    st.write("Click below to get AI generated advice based on your past perfomance.")
+    st.write("Click below to get AI-generated advice based on your past performance.")
     st.markdown('<div class="tips-button">', unsafe_allow_html=True)
     if st.button("Generate"):
         with st.spinner("Generating tips based on your progress..."):
             try:
                 df = pd.read_csv("progress.csv")
                 tips = generate_tips_from_trend(df)
-                st.markdown("### Your Personalized Tips")
-                st.markdown(tips)
+                if tips.startswith("Oops!") or "error" in tips.lower():
+                    st.error(tips)  # Display API errors in red
+                else:
+                    st.markdown("### Your Personalized Tips")
+                    st.markdown(tips)
             except FileNotFoundError:
                 st.write("No progress data available yet. Start practicing to get tips!")
     st.markdown('</div>', unsafe_allow_html=True)

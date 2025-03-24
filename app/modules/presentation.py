@@ -83,9 +83,14 @@ def display_presentation():
             st.write(user_input)
         with st.spinner("Evaluating your presentation..."):
             feedback = generate_feedback_presentation(user_input,task)
-        with st.chat_message("assistant"):
-            st.write("### Feedback Report")
-            st.markdown(feedback)
+        if feedback.startswith("Oops!") or "error" in feedback.lower():
+                    st.error(feedback)  # Display API errors in red
+        else:
+            with st.chat_message("assistant"):
+                st.write("### Feedback Report")
+                st.markdown(feedback)
+             
+        
 
     # Process voice input
     if record_button:
