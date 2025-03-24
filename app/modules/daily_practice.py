@@ -3,7 +3,6 @@ import streamlit as st
 from utils.utils import record_and_convert,daily_practice_chat_response, generate_feedback_daily_practice
 
 def display_daily_practice():
-    
     # Custom CSS for enhanced styling with fixed Record button
     st.markdown("""
         <style>

@@ -1,9 +1,7 @@
 import streamlit as st
 from utils.utils import record_and_convert, generate_feedback_presentation
 
-
-def display_presentation():
-        
+def display_presentation():    
     # Page setup
     st.title("📢 Presentation Submission")
     st.write("Submit your weekly presentation and receive detailed AI feedback.")
@@ -90,8 +88,6 @@ def display_presentation():
                 st.write("### Feedback Report")
                 st.markdown(feedback)
              
-        
-
     # Process voice input
     if record_button:
         audio_file, text = record_and_convert()

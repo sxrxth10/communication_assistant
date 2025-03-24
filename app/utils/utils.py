@@ -37,7 +37,6 @@ def record_and_convert():
             wf.setframerate(44100)
             wf.writeframes(audio.get_wav_data())
         audio_file.seek(0)
-        
         try:
             text = recognizer.recognize_google(audio)
             return audio_file, text
@@ -97,6 +96,7 @@ def daily_practice_chat_response(role, chat_history):
         except Exception as e:
             return f"An unexpected error occurred: {str(e)}. Please try again or contact support.", None
         
+
 def generate_progress_scores(client, activity, response, chat_history=None):
     prompt = (
         "You are a communication trainer. Evaluate this response or chat session and return only scores out of 10 for: "
@@ -141,6 +141,7 @@ def save_progress_csv(date, module, scores):
         if not file_exists:
             writer.writeheader()
         writer.writerow(row)
+
 
 # Feedback generation function daily practice
 def generate_feedback_daily_practice(chat_history):
@@ -195,10 +196,10 @@ def generate_feedback_daily_practice(chat_history):
         except Exception as e:
             return f"An unexpected error occurred: {str(e)}. Please try again or contact support."
 
+
 def generate_tips_from_trend(df):
     if df.empty:
         return "No progress data available yet. Start practicing to get tips!"
-    
     # Calculate average daily scores
     criteria_cols = ['Content', 'Delivery', 'Structure', 'Language skills', 'Creativity', 'Communication', 'Vocabulary', 'Grammar']
     daily_avg = df.groupby('date')[criteria_cols].mean().mean(axis=1)
@@ -336,6 +337,7 @@ def generate_prompt_skilltraining(activity):
         return f"Server issue: {str(e)}. Please try again later."
     except Exception as e:
         return f"An unexpected error occurred: {str(e)}. Please try again or contact support."
+
 
 # Feedback generation function
 def generate_feedback_skilltraining(response, activity, is_voice=False):
