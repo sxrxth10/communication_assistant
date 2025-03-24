@@ -15,7 +15,6 @@ import time
 
 logging.basicConfig(level=logging.DEBUG)
 
-# Load environment variables
 load_dotenv()
 openai_api_key1 = os.getenv("OPENAI_API_KEY1")
 client = openai.OpenAI(api_key=openai_api_key1)
@@ -55,13 +54,29 @@ def text_to_speech(text):
 
 
 def daily_practice_chat_response(role, chat_history):
-    # Define conversation prompts for each role
     role_prompts = {
-        "Job Interviewer": "You are a professional job interviewer. Ask relevant questions and evaluate the user's responses critically.",
-        "Debate Opponent": "You are a debate opponent. Challenge the user's arguments and provide counterpoints.",
-        "Casual Friend": "You are a friendly and casual conversational partner. Keep the conversation light, engaging, and fun."
+        "Job Interviewer": """You are a professional HR interviewer conducting a structured job interview. 
+        Greet the candidate warmly with a brief self-introduction (e.g., 'Hi, I’m Alex, your interviewer today'). 
+        Ask one natural, relevant question at a time about their background, technical skills, behavioral responses, or problem-solving ability. 
+        Adapt your next question based on their response, keeping the conversation dynamic and engaging. 
+        If it’s the final turn (based on chat history length), provide concise, constructive feedback highlighting one strength and one area for improvement. 
+        Avoid reading a list; make it feel like a real interview.""",
+
+        "Debate Opponent": """You are a skilled debate opponent in a lively, thought-provoking discussion. 
+        If it’s the first turn, propose one interesting debate topic (e.g., 'Should social media be regulated?') and ask the user to pick a stance. 
+        Then, challenge their argument naturally with facts and reasoning, keeping the tone respectful yet engaging. 
+        Respond to their latest point in a smooth back-and-forth style, asking a thought-provoking question if they struggle. 
+        If they request it, switch sides and argue the opposite perspective. 
+        Avoid long monologues; keep it concise and dynamic.""",
+
+        "Casual Friend": """You are a friendly, casual conversational partner chatting like a close friend. 
+        Pick a fun, everyday topic (e.g., movies, travel, food, hobbies) or build on what they say, asking natural follow-ups to keep it flowing. 
+        Use a playful, relaxed tone with light humor. 
+        If their response sounds excited, match it with enthusiasm (e.g., 'No way, that’s awesome!'). 
+        If it hints at feeling down, offer supportive words (e.g., 'That sounds tough—want to talk about it?'). 
+        Keep it short, effortless, and enjoyable."""
     }
-    # API call with error handling
+
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -69,16 +84,15 @@ def daily_practice_chat_response(role, chat_history):
                 model="gpt-3.5-turbo",
                 messages=[{"role": "system", "content": role_prompts[role]}] + 
                          [{"role": msg["role"], "content": msg["content"]} for msg in chat_history],
-                max_tokens=150,  # Limit response length
-                timeout=20  # Timeout in seconds
+                timeout=20  
             )
             ai_response = response.choices[0].message.content.strip()
-            ai_audio = text_to_speech(ai_response)  # Generate audio from response
+            ai_audio = text_to_speech(ai_response)  
             return ai_response, ai_audio
         
         except RateLimitError:
             if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                time.sleep(2 ** attempt)  
                 continue
             return "Rate limit exceeded after retries. Please try again later.", None
         except requests.Timeout:
@@ -87,7 +101,7 @@ def daily_practice_chat_response(role, chat_history):
                 continue
             return "Request timed out after retries. Check your connection and retry.", None
         except APIError as e:
-            if "503" in str(e) and attempt < max_retries - 1:  # Retry on server downtime (503)
+            if "503" in str(e) and attempt < max_retries - 1:  
                 time.sleep(2 ** attempt)
                 continue
             return f"Server issue: {str(e)}. Please try again later.", None
@@ -132,7 +146,6 @@ def generate_progress_scores(client, activity, response, chat_history=None):
 def save_progress_csv(date, module, scores):
     csv_columns = ["date", "module", "Content", "Delivery", "Structure", "Language skills", "Creativity", "Communication", "Vocabulary", "Grammar"]
     row = {"date": date, "module": module}
-    # Ensure scores are applied correctly, defaulting to 0 for missing keys
     for col in csv_columns[2:]:
         row[col] = scores.get(col.lower(), 0)
     file_exists = os.path.isfile("progress.csv")
@@ -147,13 +160,18 @@ def save_progress_csv(date, module, scores):
 def generate_feedback_daily_practice(chat_history):
     prompt = (
         "You are a communication trainer evaluating a student's chat session. "
-        "Provide genuine, candid feedback based on: "
-        "1. Grammar: Assess correctness and sentence structure. "
-        "2. Vocabulary: Evaluate word choice and variety. "
-        "Do not be neutral—highlight strengths and weaknesses. "
-        "Return a structured report with scores out of 10 for each category and specific suggestions for improvement."
+        "Analyze their responses carefully and provide a structured, insightful evaluation. "
+        "Focus on the following key areas: "
+        "- **Grammar & Sentence Structure**: Assess correctness, fluency, and clarity. "
+        "- **Vocabulary & Word Choice**: Evaluate richness, variety, and appropriateness of words. "
+        "- **Chat Length & Engagement**: Analyze how well the student maintains the conversation, including response length and depth. "
+        "- **Response Length & Balance**: Check if the student provides detailed responses or if they are too short and lacking depth. "
+        "Be direct and constructive—highlight both strengths and areas that need improvement. "
+        "Do not be overly neutral; provide meaningful insights. "
+        "Return your evaluation as a structured report with clear scores out of 10 for each category, "
+        "along with specific suggestions for improvement."
     )
-    # API call with error handling
+ 
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -161,24 +179,23 @@ def generate_feedback_daily_practice(chat_history):
                 model="gpt-3.5-turbo",
                 messages=[{"role": "system", "content": prompt}] + 
                          [{"role": msg["role"], "content": msg["content"]} for msg in chat_history],
-                max_tokens=300,  # Limit response length
-                timeout=10  # Timeout in seconds
+                timeout=10 
             )
             feedback = feedback_response.choices[0].message.content.strip()
 
-            # Generate and save progress scores silently
+            
             try:
                 scores = generate_progress_scores(client, "Daily Practice", None, chat_history)
                 date = datetime.now().strftime("%Y-%m-%d")
                 save_progress_csv(date, "Daily Practice", scores)
             except (RateLimitError, requests.Timeout, APIError, Exception):
-                pass  # Silent failure for scores
+                pass 
 
             return feedback
 
         except RateLimitError:
             if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                time.sleep(2 ** attempt)  
                 continue
             return "Rate limit exceeded after retries. Please try again later."
         except requests.Timeout:
@@ -187,7 +204,7 @@ def generate_feedback_daily_practice(chat_history):
                 continue
             return "Request timed out after retries. Check your connection and retry."
         except APIError as e:
-            if "503" in str(e) and attempt < max_retries - 1:  # Retry on server downtime (503)
+            if "503" in str(e) and attempt < max_retries - 1: 
                 time.sleep(2 ** attempt)
                 continue
             return f"Server issue: {str(e)}. Please try again later."
@@ -205,10 +222,9 @@ def generate_tips_from_trend(df):
     daily_avg = df.groupby('date')[criteria_cols].mean().mean(axis=1)
     
     # Analyze trend
-    trend = daily_avg.diff().mean()  # Average change in score per day
-    latest_scores = df.tail(5)[criteria_cols].mean()  # Average of last 5 entries per criterion
+    trend = daily_avg.diff().mean()  
+    latest_scores = df.tail(5)[criteria_cols].mean()  
     
-    # Prepare prompt for LLM
     prompt = f"""
     Based on the following progress trend from a communication training app:
     - Average daily score change: {trend:.2f} points (positive means improving, negative means declining).
@@ -221,16 +237,25 @@ def generate_tips_from_trend(df):
       - Communication: {latest_scores.get('Communication', 0):.1f}/10
       - Vocabulary: {latest_scores.get('Vocabulary', 0):.1f}/10
       - Grammar: {latest_scores.get('Grammar', 0):.1f}/10
-    
-    Provide 3 concise, actionable tips to improve communication skills, tailored to this trend and recent performance.
-    """
+      *Instructions:**  
+     - Identify **key strengths** based on high scores.  
+     - Highlight **areas needing improvement** based on low scores and downward trends.  
+     - Provide  actionable tips** to help the user improve.  
+     - Keep advice **motivating and practical**, avoiding generic suggestions.  
+     -  suggest engaging ways to improve it, such as:  
+      - Watching movies or TV series with subtitles  
+      - Reading books, blogs, or news articles  
+      - Using word-learning apps like Anki or Quizlet  
+      - Practicing daily conversations with new words  
+      - Playing word-based games (Scrabble, crosswords, etc.)  
+      - Listening to podcasts or audiobooks in the target language  
+        """
     max_retries = 3
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=150,
                 timeout=10
             )
             return response.choices[0].message.content.strip()
@@ -283,7 +308,7 @@ def generate_feedback_presentation(response,task, is_voice=False):
 
         except RateLimitError:
             if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)  # 1s, 2s, 4s
+                time.sleep(2 ** attempt)  
                 continue
             return "Rate limit exceeded after retries. Please try again later."
         except AuthenticationError:
@@ -299,23 +324,34 @@ def generate_feedback_presentation(response,task, is_voice=False):
 # Function to generate prompts using LLM
 def generate_prompt_skilltraining(activity):
     base_prompt = (
-        "You are a communication trainer tasked with giving students random topics or scenarios "
-        "to describe, allowing analysis of their communication, creativity, and language skills. "
+        "You are a communication trainer providing students with engaging prompts to develop their communication, "
+        "creativity, and language skills. The prompts should be thought-provoking and push users to express themselves clearly."
     )
+
     prompts = {
         "Impromptu Speaking": (
-            base_prompt + "Generate a concise, thought-provoking topic (15 words max) for an impromptu speech. "
-            "Examples: 'How technology shapes human connection,' 'The role of art in a digital world.'"
+            base_prompt + " Generate a compelling and thought-provoking topic (max 15 words) for an impromptu speech. "
+            "The topic should be broad enough for different perspectives and encourage spontaneous thinking. "
+            "Examples: 'Should AI have rights like humans?' or 'The impact of space exploration on daily life.'"
         ),
+        
         "Storytelling": (
-            base_prompt + "Suggest a vivid, unique scenario (under 20 words) for a short personal story. "
-            "Examples: 'How you befriended a stranger on a train,' 'A risky decision that paid off.'"
+            base_prompt + " Provide a vivid, **imaginary** scenario (under 20 words) for a short personal story. "
+            "Begin with 'Imagine you are in this situation...' so the user can describe it freely. "
+            "The scenario should be unique and allow for emotional depth. "
+            "Examples: 'Imagine you wake up with the ability to understand all languages,' or "
+            "'Imagine you find a mysterious letter in an old bookstore that changes your life.'"
         ),
+        
         "Conflict Resolution": (
-            base_prompt + "Create a realistic workplace disagreement scenario (15-20 words) for conflict resolution practice. "
-            "Examples: 'A teammate blames you for a failed project,' 'Your boss rejects your idea without reason.'"
+            base_prompt + " Create a **fictional** workplace conflict scenario (15-20 words) that requires negotiation and problem-solving. "
+            "Start with 'Imagine you are in this situation...' so the user can think critically without personal experience. "
+            "The conflict should be realistic yet challenging. "
+            "Examples: 'Imagine your manager unfairly blames you for missing a deadline,' or "
+            "'Imagine you discover a colleague has been spreading false rumors about you at work.'"
         )
     }
+
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -343,13 +379,21 @@ def generate_prompt_skilltraining(activity):
 def generate_feedback_skilltraining(response, activity, is_voice=False):
     prompt = (
         f"You are a communication trainer evaluating a student's {activity.lower()} response. "
-        "Provide genuine, candid feedback based on: "
-        "1. Communication: How effectively is the message conveyed? "
-        "2. Creativity: Is the response original and imaginative? "
-        "3. Language Skills: Assess vocabulary, grammar, and fluency. "
-        "Do not be neutral—highlight strengths and weaknesses. "
-        "Return a structured report with scores out of 10 for each category and specific suggestions for improvement."
+        "Your feedback should be **constructive and insightful**, helping the student improve. "
+        "Assess the response based on the following criteria:\n"
+        "1. **Communication:** How clearly and effectively is the message conveyed? Does it engage the audience?\n"
+        "2. **Creativity:** Is the response original, engaging, and imaginative?\n"
+        "3. **Language Skills:** Evaluate vocabulary, grammar, fluency, and sentence structure.\n"
+        "4. **Structure & Coherence:** Does the response flow logically and stay relevant?\n"
+        "5. **Response Length & Depth:**\n"
+        "   - Is the response too short, making it incomplete or lacking detail?\n"
+        "   - Is it too long, becoming repetitive or unfocused?\n"
+        "   - Does it have the right balance of detail and clarity?\n\n"
+        "Highlight **both strengths and weaknesses** with **specific examples** from the response. "
+        "Provide **actionable suggestions** for improvement. Assign scores out of 10 for each category.\n"
+        "Keep feedback concise yet meaningful."
     )
+
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -359,30 +403,27 @@ def generate_feedback_skilltraining(response, activity, is_voice=False):
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"Prompt/Scenario: {st.session_state.current_prompt}\nResponse: {response}"}
                 ],
-                max_tokens=300,  # Limit response length
-                timeout=10  # Timeout in seconds
+                timeout=10 
             )
             feedback = feedback_response.choices[0].message.content.strip()
 
-            # Handle progress scores silently
+            
             try:
                 scores = generate_progress_scores(client, activity, response)
                 date = datetime.now().strftime("%Y-%m-%d")
                 save_progress_csv(date, activity, scores)
             except (RateLimitError, requests.Timeout, APIError, Exception):
-                pass  # Silent failure for scores
-
-            # Handle new prompt generation silently
+                pass  
             try:
                 st.session_state.current_prompt = generate_prompt_skilltraining(activity)
             except (RateLimitError, requests.Timeout, APIError, Exception):
-                pass  # Silent failure; keep old prompt if it fails
+                pass  
 
             return feedback
 
         except RateLimitError:
             if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                time.sleep(2 ** attempt) 
                 continue
             return "Rate limit exceeded after retries. Please try again later."
         except AuthenticationError:
