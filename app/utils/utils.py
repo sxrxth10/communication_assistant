@@ -27,7 +27,7 @@ def record_and_convert():
     with st.spinner("Recording and processing your voice..."):
         with mic as source:
             recognizer.adjust_for_ambient_noise(source, duration=1)
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=60)
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=120)
         
         audio_file = io.BytesIO()
         with wave.open(audio_file, 'wb') as wf:
