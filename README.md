@@ -28,7 +28,7 @@ A web-based application built with Streamlit and OpenAI’s GPT-3.5-turbo model 
     OPENAI_API_KEY1=your-api-key-here
 
 4. **Run the Application**:
-    streamlit run frontend/app.py
+    streamlit run app/app.py
     Open your browser to http://localhost:8501
 
 
