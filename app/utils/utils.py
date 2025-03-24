@@ -52,6 +52,18 @@ def text_to_speech(text):
     audio_file.seek(0)
     return audio_file
 
+def save_progress_csv(date, module, scores):
+    csv_columns = ["date", "module", "Content", "Delivery", "Structure", "Language skills", "Creativity", "Communication", "Vocabulary", "Grammar"]
+    row = {"date": date, "module": module}
+    for col in csv_columns[2:]:
+        row[col] = scores.get(col.lower(), 0)
+    file_exists = os.path.isfile("progress.csv")
+    with open("progress.csv", "a", newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=csv_columns)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
 
 def daily_practice_chat_response(role, chat_history):
     role_prompts = {
@@ -76,7 +88,6 @@ def daily_practice_chat_response(role, chat_history):
         If it hints at feeling down, offer supportive words (e.g., 'That sounds tough—want to talk about it?'). 
         Keep it short, effortless, and enjoyable."""
     }
-
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -109,6 +120,216 @@ def daily_practice_chat_response(role, chat_history):
             return "Authentication error: Please check your API key and try again.", None
         except Exception as e:
             return f"An unexpected error occurred: {str(e)}. Please try again or contact support.", None
+
+
+# Feedback generation function daily practice
+def generate_feedback_daily_practice(chat_history):
+    prompt = (
+        "You are a communication trainer evaluating a student's chat session. "
+        "Analyze their responses carefully and provide a structured, insightful evaluation. "
+        "Focus on the following key areas: "
+        "- **Response Length & Balance**: Check if the student provides detailed responses or if they are too short and lacking depth. "
+        "- **Grammar & Sentence Structure**: Assess correctness, fluency, and clarity. "
+        "- **Vocabulary & Word Choice**: Evaluate richness, variety, and appropriateness of words. "
+        "- **Chat Length & Engagement**: Analyze how well the student maintains the conversation, including response length and depth. "
+        "Be direct and constructive—highlight both strengths and areas that need improvement. "
+        "Do not be overly neutral; provide meaningful insights. "
+        "Return your evaluation as a structured report with clear scores out of 10 for each category, "
+        "along with specific suggestions for improvement."
+    )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            feedback_response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "system", "content": prompt}] + 
+                         [{"role": msg["role"], "content": msg["content"]} for msg in chat_history],
+                timeout=10 
+            )
+            feedback = feedback_response.choices[0].message.content.strip()
+
+            try:
+                scores = generate_progress_scores(client, "Daily Practice", None, chat_history)
+                date = datetime.now().strftime("%Y-%m-%d")
+                save_progress_csv(date, "Daily Practice", scores)
+            except (RateLimitError, requests.Timeout, APIError, Exception):
+                pass 
+            return feedback
+
+        except RateLimitError:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  
+                continue
+            return "Rate limit exceeded after retries. Please try again later."
+        except requests.Timeout:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            return "Request timed out after retries. Check your connection and retry."
+        except APIError as e:
+            if "503" in str(e) and attempt < max_retries - 1: 
+                time.sleep(2 ** attempt)
+                continue
+            return f"Server issue: {str(e)}. Please try again later."
+        except AuthenticationError:
+            return "Authentication error: Please check your API key."
+        except Exception as e:
+            return f"An unexpected error occurred: {str(e)}. Please try again or contact support."
+
+
+# Feedback generation function
+def generate_feedback_presentation(response,task, is_voice=False):
+    prompt = (
+        "You are a communication trainer evaluating a student's presentation. "
+        "Provide genuine, candid feedback based on: "
+        "1. Structure: Is there a clear intro, body, and conclusion? "
+        "2. Delivery: Assess pacing, tone, and clarity (for voice, infer from transcribed text). "
+        "3. Content: Evaluate persuasiveness, vocabulary, and relevance. "
+        "Do not be neutral—highlight strengths and weaknesses. "
+        "Return a structured report with scores out of 10 for each category and specific suggestions for improvement."
+    )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            feedback_response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": f"Task: {task}\nResponse: {response}"}
+                ],
+                timeout=10
+            )
+            feedback = feedback_response.choices[0].message.content.strip()
+            try:
+                scores = generate_progress_scores(client, "Presentation", response)
+                date = datetime.now().strftime("%Y-%m-%d")
+                save_progress_csv(date, "Presentation", scores)
+            except (RateLimitError, requests.Timeout, APIError, Exception):
+                pass
+            return feedback
+
+        except RateLimitError:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  
+                continue
+            return "Rate limit exceeded after retries. Please try again later."
+        except AuthenticationError:
+            return "Authentication error: Please check your API key."
+        except requests.Timeout:
+            return "Request timed out. Check your connection and retry."
+        except APIError as e:
+            return f"Server issue: {str(e)}. Try again later."
+        except Exception as e:
+            return f"Unexpected error: {str(e)}. Contact support."
+        
+
+# Function to generate prompts using LLM
+def generate_prompt_skilltraining(activity):
+    base_prompt = (
+        "You are a communication trainer providing students with engaging prompts to develop their communication, "
+        "creativity, and language skills. The prompts should be thought-provoking and push users to express themselves clearly."
+    )
+    prompts = {
+        "Impromptu Speaking": (
+            base_prompt + " Generate a compelling and thought-provoking topic (max 15 words) for an impromptu speech. "
+            "The topic should be broad enough for different perspectives and encourage spontaneous thinking. "
+            "Examples: 'Should AI have rights like humans?' or 'The impact of space exploration on daily life.'"
+        ),
+        
+        "Storytelling": (
+            base_prompt + " Provide a vivid, **imaginary** scenario (under 20 words) for a short personal story. "
+            "Begin with 'Imagine you are in this situation...' so the user can describe it freely. "
+            "The scenario should be unique and allow for emotional depth. "
+            "Examples: 'Imagine you wake up with the ability to understand all languages,' or "
+            "'Imagine you find a mysterious letter in an old bookstore that changes your life.'"
+        ),
+        "Conflict Resolution": (
+            base_prompt + " Create a **fictional** workplace conflict scenario (15-20 words) that requires negotiation and problem-solving. "
+            "Start with 'Imagine you are in this situation...' so the user can think critically without personal experience. "
+            "The conflict should be realistic yet challenging. "
+            "Examples: 'Imagine your manager unfairly blames you for missing a deadline,' or "
+            "'Imagine you discover a colleague has been spreading false rumors about you at work.'"
+        )
+    }
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a communication trainer."},
+                {"role": "user", "content": prompts[activity]}
+            ],
+            timeout=10 
+        )
+        return response.choices[0].message.content.strip()
+    
+    except RateLimitError:
+        return "Oops! We've hit the API rate limit. Please wait a moment and try again."
+    except AuthenticationError:
+        return "Authentication error: Please check your API key and try again."
+    except requests.Timeout:
+        return "The request timed out. Check your internet connection and try again."
+    except APIError as e:
+        return f"Server issue: {str(e)}. Please try again later."
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}. Please try again or contact support."
+
+
+# Feedback generation function
+def generate_feedback_skilltraining(response, activity, is_voice=False):
+    prompt = (
+        f"You are a communication trainer evaluating a student's {activity.lower()} response. "
+        "Your feedback should be **constructive and insightful**, helping the student improve. "
+        "Assess the response based on the following criteria:\n"
+        "1. **Communication:** How clearly and effectively is the message conveyed? Does it engage the audience?\n"
+        "2. **Creativity:** Is the response original, engaging, and imaginative?\n"
+        "3. **Language Skills:** Evaluate vocabulary, grammar, fluency, and sentence structure.\n"
+        "4. **Structure & Coherence:** Does the response flow logically and stay relevant?\n"
+        "5. **Response Length & Depth:**\n"
+        "   - Is the response too short, making it incomplete or lacking detail?\n"
+        "   - Is it too long, becoming repetitive or unfocused?\n"
+        "   - Does it have the right balance of detail and clarity?\n\n"
+        "Highlight **both strengths and weaknesses** with **specific examples** from the response. "
+        "Provide **actionable suggestions** for improvement. Assign scores out of 10 for each category.\n"
+        "Keep feedback concise yet meaningful."
+    )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            feedback_response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": f"Prompt/Scenario: {st.session_state.current_prompt}\nResponse: {response}"}
+                ],
+                timeout=10 
+            )
+            feedback = feedback_response.choices[0].message.content.strip()
+
+            try:
+                scores = generate_progress_scores(client, activity, response)
+                date = datetime.now().strftime("%Y-%m-%d")
+                save_progress_csv(date, activity, scores)
+            except (RateLimitError, requests.Timeout, APIError, Exception):
+                pass  
+            try:
+                st.session_state.current_prompt = generate_prompt_skilltraining(activity)
+            except (RateLimitError, requests.Timeout, APIError, Exception):
+                pass  
+            return feedback
+
+        except RateLimitError:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt) 
+                continue
+            return "Rate limit exceeded after retries. Please try again later."
+        except AuthenticationError:
+            return "Authentication error: Please check your API key."
+        except requests.Timeout:
+            return "Request timed out. Check your connection and retry."
+        except APIError as e:
+            return f"Server issue: {str(e)}. Please try again later."
+        except Exception as e:
+            return f"Unexpected error: {str(e)}. Contact support."
         
 
 def generate_progress_scores(client, activity, response, chat_history=None):
@@ -143,84 +364,12 @@ def generate_progress_scores(client, activity, response, chat_history=None):
     return scores
 
 
-def save_progress_csv(date, module, scores):
-    csv_columns = ["date", "module", "Content", "Delivery", "Structure", "Language skills", "Creativity", "Communication", "Vocabulary", "Grammar"]
-    row = {"date": date, "module": module}
-    for col in csv_columns[2:]:
-        row[col] = scores.get(col.lower(), 0)
-    file_exists = os.path.isfile("progress.csv")
-    with open("progress.csv", "a", newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=csv_columns)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(row)
-
-
-# Feedback generation function daily practice
-def generate_feedback_daily_practice(chat_history):
-    prompt = (
-        "You are a communication trainer evaluating a student's chat session. "
-        "Analyze their responses carefully and provide a structured, insightful evaluation. "
-        "Focus on the following key areas: "
-        "- **Response Length & Balance**: Check if the student provides detailed responses or if they are too short and lacking depth. "
-        "- **Grammar & Sentence Structure**: Assess correctness, fluency, and clarity. "
-        "- **Vocabulary & Word Choice**: Evaluate richness, variety, and appropriateness of words. "
-        "- **Chat Length & Engagement**: Analyze how well the student maintains the conversation, including response length and depth. "
-        "Be direct and constructive—highlight both strengths and areas that need improvement. "
-        "Do not be overly neutral; provide meaningful insights. "
-        "Return your evaluation as a structured report with clear scores out of 10 for each category, "
-        "along with specific suggestions for improvement."
-    )
- 
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            feedback_response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "system", "content": prompt}] + 
-                         [{"role": msg["role"], "content": msg["content"]} for msg in chat_history],
-                timeout=10 
-            )
-            feedback = feedback_response.choices[0].message.content.strip()
-
-            
-            try:
-                scores = generate_progress_scores(client, "Daily Practice", None, chat_history)
-                date = datetime.now().strftime("%Y-%m-%d")
-                save_progress_csv(date, "Daily Practice", scores)
-            except (RateLimitError, requests.Timeout, APIError, Exception):
-                pass 
-
-            return feedback
-
-        except RateLimitError:
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)  
-                continue
-            return "Rate limit exceeded after retries. Please try again later."
-        except requests.Timeout:
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
-                continue
-            return "Request timed out after retries. Check your connection and retry."
-        except APIError as e:
-            if "503" in str(e) and attempt < max_retries - 1: 
-                time.sleep(2 ** attempt)
-                continue
-            return f"Server issue: {str(e)}. Please try again later."
-        except AuthenticationError:
-            return "Authentication error: Please check your API key."
-        except Exception as e:
-            return f"An unexpected error occurred: {str(e)}. Please try again or contact support."
-
-
 def generate_tips_from_trend(df):
     if df.empty:
         return "No progress data available yet. Start practicing to get tips!"
     # Calculate average daily scores
     criteria_cols = ['Content', 'Delivery', 'Structure', 'Language skills', 'Creativity', 'Communication', 'Vocabulary', 'Grammar']
     daily_avg = df.groupby('date')[criteria_cols].mean().mean(axis=1)
-    
     # Analyze trend
     trend = daily_avg.diff().mean()  
     latest_scores = df.tail(5)[criteria_cols].mean()  
@@ -271,166 +420,5 @@ def generate_tips_from_trend(df):
             return "Request timed out. Check your connection and retry."
         except APIError as e:
             return f"Server issue: {str(e)}. Try again later."
-        except Exception as e:
-            return f"Unexpected error: {str(e)}. Contact support."
-
-# Feedback generation function
-def generate_feedback_presentation(response,task, is_voice=False):
-    prompt = (
-        "You are a communication trainer evaluating a student's presentation. "
-        "Provide genuine, candid feedback based on: "
-        "1. Structure: Is there a clear intro, body, and conclusion? "
-        "2. Delivery: Assess pacing, tone, and clarity (for voice, infer from transcribed text). "
-        "3. Content: Evaluate persuasiveness, vocabulary, and relevance. "
-        "Do not be neutral—highlight strengths and weaknesses. "
-        "Return a structured report with scores out of 10 for each category and specific suggestions for improvement."
-    )
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            feedback_response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": f"Task: {task}\nResponse: {response}"}
-                ],
-                timeout=10
-            )
-            feedback = feedback_response.choices[0].message.content.strip()
-            try:
-                scores = generate_progress_scores(client, "Presentation", response)
-                date = datetime.now().strftime("%Y-%m-%d")
-                save_progress_csv(date, "Presentation", scores)
-            except (RateLimitError, requests.Timeout, APIError, Exception):
-                pass
-
-            return feedback
-
-        except RateLimitError:
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)  
-                continue
-            return "Rate limit exceeded after retries. Please try again later."
-        except AuthenticationError:
-            return "Authentication error: Please check your API key."
-        except requests.Timeout:
-            return "Request timed out. Check your connection and retry."
-        except APIError as e:
-            return f"Server issue: {str(e)}. Try again later."
-        except Exception as e:
-            return f"Unexpected error: {str(e)}. Contact support."
-        
-
-# Function to generate prompts using LLM
-def generate_prompt_skilltraining(activity):
-    base_prompt = (
-        "You are a communication trainer providing students with engaging prompts to develop their communication, "
-        "creativity, and language skills. The prompts should be thought-provoking and push users to express themselves clearly."
-    )
-
-    prompts = {
-        "Impromptu Speaking": (
-            base_prompt + " Generate a compelling and thought-provoking topic (max 15 words) for an impromptu speech. "
-            "The topic should be broad enough for different perspectives and encourage spontaneous thinking. "
-            "Examples: 'Should AI have rights like humans?' or 'The impact of space exploration on daily life.'"
-        ),
-        
-        "Storytelling": (
-            base_prompt + " Provide a vivid, **imaginary** scenario (under 20 words) for a short personal story. "
-            "Begin with 'Imagine you are in this situation...' so the user can describe it freely. "
-            "The scenario should be unique and allow for emotional depth. "
-            "Examples: 'Imagine you wake up with the ability to understand all languages,' or "
-            "'Imagine you find a mysterious letter in an old bookstore that changes your life.'"
-        ),
-        
-        "Conflict Resolution": (
-            base_prompt + " Create a **fictional** workplace conflict scenario (15-20 words) that requires negotiation and problem-solving. "
-            "Start with 'Imagine you are in this situation...' so the user can think critically without personal experience. "
-            "The conflict should be realistic yet challenging. "
-            "Examples: 'Imagine your manager unfairly blames you for missing a deadline,' or "
-            "'Imagine you discover a colleague has been spreading false rumors about you at work.'"
-        )
-    }
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a communication trainer."},
-                {"role": "user", "content": prompts[activity]}
-            ],
-            timeout=10 
-        )
-        return response.choices[0].message.content.strip()
-    
-    except RateLimitError:
-        return "Oops! We've hit the API rate limit. Please wait a moment and try again."
-    except AuthenticationError:
-        return "Authentication error: Please check your API key and try again."
-    except requests.Timeout:
-        return "The request timed out. Check your internet connection and try again."
-    except APIError as e:
-        return f"Server issue: {str(e)}. Please try again later."
-    except Exception as e:
-        return f"An unexpected error occurred: {str(e)}. Please try again or contact support."
-
-
-# Feedback generation function
-def generate_feedback_skilltraining(response, activity, is_voice=False):
-    prompt = (
-        f"You are a communication trainer evaluating a student's {activity.lower()} response. "
-        "Your feedback should be **constructive and insightful**, helping the student improve. "
-        "Assess the response based on the following criteria:\n"
-        "1. **Communication:** How clearly and effectively is the message conveyed? Does it engage the audience?\n"
-        "2. **Creativity:** Is the response original, engaging, and imaginative?\n"
-        "3. **Language Skills:** Evaluate vocabulary, grammar, fluency, and sentence structure.\n"
-        "4. **Structure & Coherence:** Does the response flow logically and stay relevant?\n"
-        "5. **Response Length & Depth:**\n"
-        "   - Is the response too short, making it incomplete or lacking detail?\n"
-        "   - Is it too long, becoming repetitive or unfocused?\n"
-        "   - Does it have the right balance of detail and clarity?\n\n"
-        "Highlight **both strengths and weaknesses** with **specific examples** from the response. "
-        "Provide **actionable suggestions** for improvement. Assign scores out of 10 for each category.\n"
-        "Keep feedback concise yet meaningful."
-    )
-
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            feedback_response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": f"Prompt/Scenario: {st.session_state.current_prompt}\nResponse: {response}"}
-                ],
-                timeout=10 
-            )
-            feedback = feedback_response.choices[0].message.content.strip()
-
-            
-            try:
-                scores = generate_progress_scores(client, activity, response)
-                date = datetime.now().strftime("%Y-%m-%d")
-                save_progress_csv(date, activity, scores)
-            except (RateLimitError, requests.Timeout, APIError, Exception):
-                pass  
-            try:
-                st.session_state.current_prompt = generate_prompt_skilltraining(activity)
-            except (RateLimitError, requests.Timeout, APIError, Exception):
-                pass  
-
-            return feedback
-
-        except RateLimitError:
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt) 
-                continue
-            return "Rate limit exceeded after retries. Please try again later."
-        except AuthenticationError:
-            return "Authentication error: Please check your API key."
-        except requests.Timeout:
-            return "Request timed out. Check your connection and retry."
-        except APIError as e:
-            return f"Server issue: {str(e)}. Please try again later."
         except Exception as e:
             return f"Unexpected error: {str(e)}. Contact support."
