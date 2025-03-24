@@ -54,11 +54,8 @@ def display_home():
         </style>
     """, unsafe_allow_html=True)
 
-
-
-    st.title("Welcome to Your Communication Journey!")
+    st.title("FluentFlow")
     st.write("Your all-in-one AI-powered tool to master speaking skills.")
-
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -76,17 +73,11 @@ def display_home():
         - **Beginner-Friendly**: No prior experience needed—just dive in and start speaking!
         """)
         
-        st.markdown("### Explore Our Modules:")
-        st.markdown('<div class="module-card">- <b>Daily Practice</b>: Chat with AI as an interviewer, debater, or friend to build confidence.</div>', unsafe_allow_html=True)
-        st.markdown('<div class="module-card">- <b>Skill Training</b>: Sharpen impromptu speaking, storytelling, and conflict resolution.</div>', unsafe_allow_html=True)
-        st.markdown('<div class="module-card">- <b>Presentation</b>: Submit weekly presentations for detailed AI feedback.</div>', unsafe_allow_html=True)
-        st.markdown('<div class="module-card">- <b>Progress</b>: Track your improvement over time with trends and tips.</div>', unsafe_allow_html=True)
-
     # Tab 2: Beginner’s Guide
     with tab2:
         st.subheader("Beginner’s Guide: Get Started in 3 Steps")
         st.write("""
-        New to the app? Follow these simple steps to kick off your communication journey:
+        New to the FluentFlow? Follow these simple steps to kick off your communication journey:
         """)
         st.markdown('<div class="step"><b>Step 1: Start with Daily Practice</b> - Navigate to "Daily Practice" from the sidebar, choose a conversation partner (e.g., Job Interviewer), and type or record your first message.</div>', unsafe_allow_html=True)
         st.markdown('<div class="step"><b>Step 2: Review Feedback</b> - After chatting, click "End Chat" to get AI feedback on your performance. Note areas like Vocabulary or Delivery to focus on.</div>', unsafe_allow_html=True)

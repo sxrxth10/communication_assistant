@@ -11,7 +11,7 @@ def display_skill_training():
         <style>
         .main-container {
             padding: 20px;
-            background-color: #f9f9f9;
+            background-color: #c7473e;
             border-radius: 10px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
@@ -40,8 +40,6 @@ def display_skill_training():
         }
         </style>
     """, unsafe_allow_html=True)
-
-    st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
     # Activity selection
     activity = st.selectbox("Choose an activity:", ["Impromptu Speaking", "Storytelling", "Conflict Resolution"])
@@ -82,7 +80,6 @@ def display_skill_training():
         with st.chat_message("assistant"):
             st.write("### Feedback Report")
             st.markdown(feedback)
-
     # Process voice input
     if record_button:
         audio_file, text = record_and_convert()

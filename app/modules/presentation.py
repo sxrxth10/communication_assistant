@@ -41,8 +41,6 @@ def display_presentation():
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="main-container">', unsafe_allow_html=True)
-
     # Define 10 weekly presentation tasks
     weekly_tasks = [
         "Deliver a 2-minute self-introduction highlighting your strengths and goals.",

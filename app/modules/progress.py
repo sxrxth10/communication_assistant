@@ -62,8 +62,6 @@ def display_progress():
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="main-container">', unsafe_allow_html=True)
-
     # Interactive Progress Chart from CSV
     st.subheader("Progress Over Time")
     try:
