@@ -88,7 +88,7 @@ A web-based application built with Streamlit and OpenAI’s GPT-3.5-turbo model 
 
 
 ### Future Improvements
-**Add unit/integration tests for core functions.**
-**Support xAI API switching via configuration.**
-**Enhance voice feedback with real-time pacing analysis.**
-**Multi-language support for broader accessibility.**
+1. **Add unit/integration tests for core functions.**
+2. **Support xAI API switching via configuration.**
+3. **Enhance voice feedback with real-time pacing analysis.**
+4. **Multi-language support for broader accessibility.**
