@@ -60,11 +60,12 @@ def display_home():
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Tabs for Overview and Guide
-    tab1, tab2 = st.tabs(["Project Overview", "Beginner’s Guide"])
+    tab1, tab2 = st.tabs([""
+    " Overview", "Beginner’s Guide"])
 
     # Tab 1: Project Overview
     with tab1:
-        st.subheader("Project Overview")
+        st.subheader("FluentFlow Overview")
         st.write("""
         This app is designed to help you become a confident and effective communicator. Whether you're preparing for a job interview, sharpening your debate skills, or simply improving everyday conversations, our AI-driven modules provide personalized practice and feedback. Here's what you can expect:
         - **Interactive Practice**: Engage with AI in realistic scenarios tailored to your goals.
