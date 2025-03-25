@@ -87,7 +87,7 @@ def display_daily_practice():
     """, unsafe_allow_html=True)
     
     # Conversation Role Selection
-    role = st.selectbox("Choose your conversation partner:", ["Job Interviewer", "Debate Opponent", "Casual Friend"])
+    role = st.selectbox("Choose your conversation partner:", ["Job Interviewer", "Debate Opponent", "Casual Friend", "custom"])
 
     # Initialize chat history in session state
     if "chat_history" not in st.session_state:

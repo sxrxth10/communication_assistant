@@ -86,7 +86,9 @@ def daily_practice_chat_response(role, chat_history):
         Use a playful, relaxed tone with light humor. 
         If their response sounds excited, match it with enthusiasm (e.g., 'No way, that’s awesome!'). 
         If it hints at feeling down, offer supportive words (e.g., 'That sounds tough—want to talk about it?'). 
-        Keep it short, effortless, and enjoyable."""
+        Keep it short, effortless, and enjoyable.""",
+
+        "custom":"""You are an AI communication assistant. Respond naturally based on the conversation context."""
     }
     max_retries = 3
     for attempt in range(max_retries):
